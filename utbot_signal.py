@@ -4,7 +4,6 @@ import numpy as np
 import requests
 import os
 import json
-import time
 from datetime import datetime
 
 FEISHU_WEBHOOK = "https://open.feishu.cn/open-apis/bot/v2/hook/d06d3b84-5c7c-4ef5-9e28-84d07ab758f4"
@@ -81,17 +80,19 @@ def check_signals(seen):
         try:
             df = yf.download(symbol, period=PERIOD, interval=INTERVAL, progress=False)
             if df.empty:
+                print(f"⚠️ {name}: 数据为空")
                 continue
 
             buy, sell, trail = compute_utbot(df, SENSITIVITY, ATR_PERIOD)
             close = df['Close'].squeeze()
 
-            # 只看最后一根K线
             i = -1
             ts = str(df.index[i])
             price = close.iloc[i]
             trail_val = trail.iloc[i]
             uid = f"{name}_{ts}"
+
+            print(f"{name} | 时间:{ts} | 价格:{price:.2f} | 追踪止损:{trail_val:.2f} | 买入:{buy.iloc[i]} | 卖出:{sell.iloc[i]}")
 
             if buy.iloc[i] and uid not in seen:
                 alerts.append({
@@ -116,7 +117,7 @@ def check_signals(seen):
                 seen[uid] = True
 
         except Exception as e:
-            print(f"{name} 失败: {e}")
+            print(f"❌ {name} 失败: {e}")
 
     return alerts, seen
 
@@ -147,7 +148,7 @@ def send_to_feishu(alerts):
 if __name__ == '__main__':
     seen = load_seen()
     alerts, seen = check_signals(seen)
-    save_seen(seen)  # 不管有没有信号都保存
+    save_seen(seen)
     if alerts:
         send_to_feishu(alerts)
     else:

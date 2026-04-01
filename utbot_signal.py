@@ -80,34 +80,34 @@ def check_signals(seen):
             buy, sell, trail = compute_utbot(df, SENSITIVITY, ATR_PERIOD)
             close = df['Close'].squeeze()
 
-            # 检查最近3根K线有无信号（避免漏掉）
-            for i in range(-3, 0):
-                ts = str(df.index[i])
-                price = close.iloc[i]
-                trail_val = trail.iloc[i]
-                uid = f"{name}_{ts}"
+            # 只看最后一根K线
+            i = -1
+            ts = str(df.index[i])
+            price = close.iloc[i]
+            trail_val = trail.iloc[i]
+            uid = f"{name}_{ts}"
 
-                if buy.iloc[i] and uid not in seen:
-                    alerts.append({
-                        'name': name,
-                        'signal': '🟢 买入信号 BUY',
-                        'price': price,
-                        'trail': trail_val,
-                        'time': ts,
-                        'uid': uid,
-                    })
-                    seen[uid] = True
+            if buy.iloc[i] and uid not in seen:
+                alerts.append({
+                    'name': name,
+                    'signal': '🟢 买入信号 BUY',
+                    'price': price,
+                    'trail': trail_val,
+                    'time': ts,
+                    'uid': uid,
+                })
+                seen[uid] = True
 
-                elif sell.iloc[i] and uid not in seen:
-                    alerts.append({
-                        'name': name,
-                        'signal': '🔴 卖出信号 SELL',
-                        'price': price,
-                        'trail': trail_val,
-                        'time': ts,
-                        'uid': uid,
-                    })
-                    seen[uid] = True
+            elif sell.iloc[i] and uid not in seen:
+                alerts.append({
+                    'name': name,
+                    'signal': '🔴 卖出信号 SELL',
+                    'price': price,
+                    'trail': trail_val,
+                    'time': ts,
+                    'uid': uid,
+                })
+                seen[uid] = True
 
         except Exception as e:
             print(f"{name} 失败: {e}")

@@ -18,7 +18,6 @@ jobs:
       - name: 安装依赖
         run: |
           pip install yfinance pandas numpy requests
-          pip install git+https://github.com/StreamAlpha/tvdatafeed.git
 
       - name: 下载历史 seen 文件
         uses: dawidd6/action-download-artifact@v6

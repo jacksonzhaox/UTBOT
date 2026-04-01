@@ -11,14 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 恢复 seen 缓存
-        uses: actions/cache@v4
-        with:
-          path: utbot_seen.json
-          key: utbot-seen-${{ github.run_id }}
-          restore-keys: |
-            utbot-seen-
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -26,14 +18,23 @@ jobs:
       - name: 安装依赖
         run: pip install yfinance pandas numpy requests
 
+      - name: 下载历史 seen 文件
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          name: utbot-seen
+          path: .
+          if_no_artifact_found: ignore
+        continue-on-error: true
+
       - name: UT Bot 信号监控
         env:
           FEISHU_WEBHOOK: ${{ secrets.UTBOT_WEBHOOK }}
         run: python utbot_signal.py
 
-      - name: 保存 seen 缓存
-        uses: actions/cache/save@v4
-        if: always()
+      - name: 上传最新 seen 文件
+        uses: actions/upload-artifact@v4
         with:
+          name: utbot-seen
           path: utbot_seen.json
-          key: utbot-seen-${{ github.run_id }}
+          retention-days: 7
+          overwrite: true

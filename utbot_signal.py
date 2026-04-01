@@ -19,6 +19,12 @@ PERIOD = '5d'
 SYMBOLS = {
     'BTC': 'BTC-USD',
     'ETH': 'ETH-USD',
+    'BNB': 'BNB-USD',
+    '狗狗币': 'DOGE-USD',
+    '黄金': 'GC=F',
+    '道琼斯': '^DJI',
+    '纳斯达克': '^IXIC',
+    '标普500': '^GSPC',
 }
 
 def load_seen():

@@ -141,8 +141,8 @@ def send_to_feishu(alerts):
 if __name__ == '__main__':
     seen = load_seen()
     alerts, seen = check_signals(seen)
+    save_seen(seen)  # 不管有没有信号都保存
     if alerts:
         send_to_feishu(alerts)
-        save_seen(seen)
     else:
         print(f"[{datetime.now().strftime('%H:%M')}] 暂无 UT Bot 信号")

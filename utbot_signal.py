@@ -4,6 +4,7 @@ import numpy as np
 import requests
 import os
 import json
+import pytz
 from datetime import datetime
 
 FEISHU_WEBHOOK = "https://open.feishu.cn/open-apis/bot/v2/hook/d06d3b84-5c7c-4ef5-9e28-84d07ab758f4"
@@ -14,6 +15,7 @@ SENSITIVITY = 2
 ATR_PERIOD = 10
 INTERVAL = '15m'
 PERIOD = '5d'
+BEIJING = pytz.timezone('Asia/Shanghai')
 
 SYMBOLS = {
     'BTC': 'BTC-USD',
@@ -41,7 +43,6 @@ def compute_utbot(df, sensitivity=2, atr_period=10):
     high = df['High'].squeeze()
     low = df['Low'].squeeze()
 
-    # ATR
     tr = pd.concat([
         high - low,
         (high - close.shift()).abs(),
@@ -50,7 +51,6 @@ def compute_utbot(df, sensitivity=2, atr_period=10):
     atr = tr.ewm(span=atr_period, adjust=False).mean()
     nloss = sensitivity * atr
 
-    # 追踪止损线
     xATRTrailingStop = pd.Series(0.0, index=close.index)
     for i in range(1, len(close)):
         prev = xATRTrailingStop.iloc[i-1]
@@ -86,13 +86,16 @@ def check_signals(seen):
             buy, sell, trail = compute_utbot(df, SENSITIVITY, ATR_PERIOD)
             close = df['Close'].squeeze()
 
-            i = -1
-            ts = str(df.index[i])
+            # 用倒数第二根K线（已收盘确认，与TradingView一致）
+            i = -2
+            ts_utc = df.index[i]
+            ts_beijing = ts_utc.tz_convert(BEIJING)
+            ts = ts_beijing.strftime('%Y-%m-%d %H:%M')
             price = close.iloc[i]
             trail_val = trail.iloc[i]
             uid = f"{name}_{ts}"
 
-            print(f"{name} | 时间:{ts} | 价格:{price:.2f} | 追踪止损:{trail_val:.2f} | 买入:{buy.iloc[i]} | 卖出:{sell.iloc[i]}")
+            print(f"{name} | 北京时间:{ts} | 价格:{price:.4f} | 追踪止损:{trail_val:.4f} | 买入:{buy.iloc[i]} | 卖出:{sell.iloc[i]}")
 
             if buy.iloc[i] and uid not in seen:
                 alerts.append({
@@ -122,7 +125,7 @@ def check_signals(seen):
     return alerts, seen
 
 def send_to_feishu(alerts):
-    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    now = datetime.now(BEIJING).strftime('%Y-%m-%d %H:%M')
     lines = [
         f"🚨 UT Bot 交易信号 {now}",
         f"参数: 灵敏度={SENSITIVITY} | ATR={ATR_PERIOD} | 周期=15分钟",
@@ -132,9 +135,9 @@ def send_to_feishu(alerts):
         lines += [
             f"\n{a['signal']}",
             f"品种: {a['name']}",
-            f"信号时间: {a['time']}",
-            f"当前价: ${a['price']:,.2f}",
-            f"追踪止损线: ${a['trail']:,.2f}",
+            f"信号时间: {a['time']} (北京时间)",
+            f"当前价: {a['price']:,.4f}",
+            f"追踪止损线: {a['trail']:,.4f}",
         ]
     lines += [
         "\n━━━━━━━━━━━━━━━━",
@@ -152,4 +155,5 @@ if __name__ == '__main__':
     if alerts:
         send_to_feishu(alerts)
     else:
-        print(f"[{datetime.now().strftime('%H:%M')}] 暂无 UT Bot 信号")
+        now = datetime.now(BEIJING).strftime('%H:%M')
+        print(f"[{now} 北京时间] 暂无 UT Bot 信号")

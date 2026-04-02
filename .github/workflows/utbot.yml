@@ -16,8 +16,7 @@ jobs:
           python-version: '3.11'
 
       - name: 安装依赖
-        run: |
-          pip install yfinance pandas numpy requests
+        run: pip install yfinance pandas numpy requests pytz
 
       - name: 下载历史 seen 文件
         uses: dawidd6/action-download-artifact@v6

@@ -12,13 +12,11 @@ FEISHU_WEBHOOK = "https://open.feishu.cn/open-apis/bot/v2/hook/d06d3b84-5c7c-4ef
 SEEN_FILE = 'utbot_seen.json'
 BEIJING = pytz.timezone('Asia/Shanghai')
 
-# UT Bot 参数
 SENSITIVITY = 2
 ATR_PERIOD = 10
 INTERVAL_YF = '15m'
 PERIOD_YF = '5d'
 
-# yfinance 标的
 SYMBOLS_YF = {
     'BTC': 'BTC-USD',
     'ETH': 'ETH-USD',
@@ -30,16 +28,15 @@ SYMBOLS_YF = {
     '标普500': '^GSPC',
 }
 
-# TradingView 标的
 SYMBOLS_TV = [
-    {'name': 'BTC',    'symbol': 'BTCUSDT',  'exchange': 'BINANCE',  'screener': 'crypto'},
-    {'name': 'ETH',    'symbol': 'ETHUSDT',  'exchange': 'BINANCE',  'screener': 'crypto'},
-    {'name': 'BNB',    'symbol': 'BNBUSDT',  'exchange': 'BINANCE',  'screener': 'crypto'},
-    {'name': '狗狗币',  'symbol': 'DOGEUSDT', 'exchange': 'BINANCE',  'screener': 'crypto'},
-    {'name': '黄金',   'symbol': 'XAUUSD',   'exchange': 'OANDA',    'screener': 'CFD'},
-    {'name': '道琼斯',  'symbol': 'DJI',      'exchange': 'DJ',       'screener': 'america'},
-    {'name': '纳斯达克','symbol': 'IXIC',     'exchange': 'NASDAQ',   'screener': 'america'},
-    {'name': '标普500', 'symbol': 'SPX',      'exchange': 'SP',       'screener': 'america'},
+    {'name': 'BTC',     'symbol': 'BTCUSDT',  'exchange': 'BINANCE', 'screener': 'crypto'},
+    {'name': 'ETH',     'symbol': 'ETHUSDT',  'exchange': 'BINANCE', 'screener': 'crypto'},
+    {'name': 'BNB',     'symbol': 'BNBUSDT',  'exchange': 'BINANCE', 'screener': 'crypto'},
+    {'name': '狗狗币',   'symbol': 'DOGEUSDT', 'exchange': 'BINANCE', 'screener': 'crypto'},
+    {'name': '黄金',    'symbol': 'XAUUSD',   'exchange': 'OANDA',   'screener': 'CFD'},
+    {'name': '道琼斯',   'symbol': 'DJI',      'exchange': 'DJ',      'screener': 'america'},
+    {'name': '纳斯达克', 'symbol': 'IXIC',     'exchange': 'NASDAQ',  'screener': 'america'},
+    {'name': '标普500',  'symbol': 'SPX',      'exchange': 'SP',      'screener': 'america'},
 ]
 
 def load_seen():
@@ -99,38 +96,40 @@ def check_utbot(seen):
             buy, sell, trail = compute_utbot(df)
             close = df['Close'].squeeze()
 
-            i = -2
-            ts_utc = df.index[i]
-            ts_beijing = ts_utc.tz_convert(BEIJING)
-            ts = ts_beijing.strftime('%Y-%m-%d %H:%M')
-            price = close.iloc[i]
-            trail_val = trail.iloc[i]
-            uid = f"utbot_{name}_{ts}"
+            # 检查最近5根已收盘K线
+            for i in range(-6, -1):
+                ts_utc = df.index[i]
+                ts_beijing = ts_utc.tz_convert(BEIJING)
+                ts = ts_beijing.strftime('%Y-%m-%d %H:%M')
+                price = close.iloc[i]
+                trail_val = trail.iloc[i]
+                uid = f"utbot_{name}_{ts}"
 
-            print(f"[UTBot] {name} | {ts} | 价格:{price:.4f} | 追踪止损:{trail_val:.4f} | 买:{buy.iloc[i]} | 卖:{sell.iloc[i]}")
+                print(f"[UTBot] {name} | {ts} | 价格:{price:.4f} | 追踪止损:{trail_val:.4f} | 买:{buy.iloc[i]} | 卖:{sell.iloc[i]}")
 
-            if buy.iloc[i] and uid not in seen:
-                alerts.append({
-                    'source': 'UT Bot',
-                    'name': name,
-                    'signal': '🟢 买入信号 BUY',
-                    'price': price,
-                    'extra': f"追踪止损: {trail_val:.4f}",
-                    'time': ts,
-                    'uid': uid,
-                })
-                seen[uid] = True
-            elif sell.iloc[i] and uid not in seen:
-                alerts.append({
-                    'source': 'UT Bot',
-                    'name': name,
-                    'signal': '🔴 卖出信号 SELL',
-                    'price': price,
-                    'extra': f"追踪止损: {trail_val:.4f}",
-                    'time': ts,
-                    'uid': uid,
-                })
-                seen[uid] = True
+                if buy.iloc[i] and uid not in seen:
+                    alerts.append({
+                        'source': 'UT Bot (灵敏度=2 ATR=10)',
+                        'name': name,
+                        'signal': '🟢 买入信号 BUY',
+                        'price': price,
+                        'extra': f"追踪止损线: {trail_val:.4f}",
+                        'time': ts,
+                        'uid': uid,
+                    })
+                    seen[uid] = True
+
+                elif sell.iloc[i] and uid not in seen:
+                    alerts.append({
+                        'source': 'UT Bot (灵敏度=2 ATR=10)',
+                        'name': name,
+                        'signal': '🔴 卖出信号 SELL',
+                        'price': price,
+                        'extra': f"追踪止损线: {trail_val:.4f}",
+                        'time': ts,
+                        'uid': uid,
+                    })
+                    seen[uid] = True
 
         except Exception as e:
             print(f"❌ [UTBot] {name} 失败: {e}")
@@ -160,7 +159,7 @@ def check_tv(seen):
 
             if rec in ('BUY', 'STRONG_BUY') and uid not in seen:
                 alerts.append({
-                    'source': 'TradingView综合',
+                    'source': 'TradingView 综合指标',
                     'name': s['name'],
                     'signal': '🟢 买入' if rec == 'BUY' else '🟢🟢 强烈买入',
                     'price': price,
@@ -169,9 +168,10 @@ def check_tv(seen):
                     'uid': uid,
                 })
                 seen[uid] = True
+
             elif rec in ('SELL', 'STRONG_SELL') and uid not in seen:
                 alerts.append({
-                    'source': 'TradingView综合',
+                    'source': 'TradingView 综合指标',
                     'name': s['name'],
                     'signal': '🔴 卖出' if rec == 'SELL' else '🔴🔴 强烈卖出',
                     'price': price,
@@ -211,14 +211,12 @@ def send_to_feishu(alerts):
     print("✅ 推送完成")
 
 if __name__ == '__main__':
-    seen = load_seen()
-
-    utbot_alerts, seen = check_utbot(seen)
-    tv_alerts, seen = check_tv(seen)
-
-    all_alerts = utbot_alerts + tv_alerts
+    # 清空 seen 文件重新开始
+    seen = {}
+    alerts_utbot, seen = check_utbot(seen)
+    alerts_tv, seen = check_tv(seen)
+    all_alerts = alerts_utbot + alerts_tv
     save_seen(seen)
-
     if all_alerts:
         send_to_feishu(all_alerts)
     else:

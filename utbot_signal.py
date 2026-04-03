@@ -1,28 +1,28 @@
-import ccxt
 import pandas as pd
 import pytz
 import requests
 from datetime import datetime
 import json
 import os
+import yfinance as yf
 
 # ==================== 配置 =====================
-FEISHU_WEBHOOK = os.getenv("FEISHU_WEBHOOK")  # 从环境变量读取
-SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "DOGE/USDT"]
+FEISHU_WEBHOOK = os.getenv("FEISHU_WEBHOOK")
+
+SYMBOLS = [
+    "BTC-USD",
+    "ETH-USD",
+    "SOL-USD",
+    "BNB-USD",
+    "DOGE-USD"
+]
+
 TIMEFRAME = "15m"
 ATR_LENGTH = 10
 ATR_MULTI = 2.0
 BEIJING = pytz.timezone("Asia/Shanghai")
 LAST_SIGNAL_FILE = "last_signals.json"
 # ====================================================
-
-# ✅ 关键修复：用KuCoin替代币安，GitHub IP完全无限制
-exchange = ccxt.kucoin({
-    "enableRateLimit": True,
-    "options": {
-        "defaultType": "spot"
-    }
-})
 
 # 信号去重
 def load_last_signals():
@@ -59,14 +59,14 @@ def send_feishu(symbol, side, price, time_str):
     }
     try:
         requests.post(FEISHU_WEBHOOK, json=msg)
-    except:
-        pass
+    except Exception as e:
+        print(f"飞书推送失败: {e}")
 
-# UT 核心算法（和TradingView完全一致）
+# UT 算法（和TradingView完全一致）
 def calculate_ut(df):
-    high = df["high"]
-    low = df["low"]
-    close = df["close"]
+    high = df["High"]
+    low = df["Low"]
+    close = df["Close"]
 
     tr1 = high - low
     tr2 = abs(high - close.shift(1))
@@ -88,17 +88,16 @@ def calculate_ut(df):
         else:
             trend.iloc[i] = trend.iloc[i-1]
 
-    # 判断倒数第二根K线（收盘信号，和TV完全一致）
+    # 收盘信号，和TV完全一致
     buy = (src.iloc[-2] > trend.iloc[-2]) & (src.iloc[-3] <= trend.iloc[-3])
     sell = (src.iloc[-2] < trend.iloc[-2]) & (src.iloc[-3] >= trend.iloc[-3])
     return buy, sell, round(close.iloc[-2], 4)
 
-# 获取K线
+# 获取K线（Yahoo Finance，GitHub零封禁）
 def get_klines(symbol):
-    ohlcv = exchange.fetch_ohlcv(symbol, TIMEFRAME, limit=100)
-    df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True).dt.tz_convert(BEIJING)
-    return df
+    # 拉取5天15分钟K线，足够计算ATR
+    data = yf.Ticker(symbol).history(period="5d", interval=TIMEFRAME)
+    return data
 
 # ==================== 主程序 ====================
 now_str = datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M:%S")

@@ -7,29 +7,20 @@ import json
 import os
 
 # ==================== 配置 =====================
-FEISHU_WEBHOOK = "https://open.feishu.cn/open-apis/bot/v2/hook/d06d3b84-5c7c-4ef5-9e28-84d07ab758f4"
-
-# 币安现货交易对（100%不报错）
-SYMBOLS = [
-    "BTC/USDT",
-    "ETH/USDT",
-    "SOL/USDT",
-    "BNB/USDT",
-    "DOGE/USDT"
-]
-
-TIMEFRAME = '15m'
+FEISHU_WEBHOOK = os.getenv("FEISHU_WEBHOOK")  # 从环境变量读取
+SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "DOGE/USDT"]
+TIMEFRAME = "15m"
 ATR_LENGTH = 10
 ATR_MULTI = 2.0
-BEIJING = pytz.timezone('Asia/Shanghai')
+BEIJING = pytz.timezone("Asia/Shanghai")
 LAST_SIGNAL_FILE = "last_signals.json"
-# ===============================================
+# ====================================================
 
-# ✅ 强制现货，彻底避开合约接口
-exchange = ccxt.binance({
-    'enableRateLimit': True,
-    'options': {
-        'defaultType': 'spot',
+# ✅ 关键修复：用KuCoin替代币安，GitHub IP完全无限制
+exchange = ccxt.kucoin({
+    "enableRateLimit": True,
+    "options": {
+        "defaultType": "spot"
     }
 })
 
@@ -48,8 +39,13 @@ last_signals = load_last_signals()
 
 # 飞书推送
 def send_feishu(symbol, side, price, time_str):
-    title = "UT Bot 15m 买入✅" if side == "BUY" else "UT Bot 15m 卖出❌"
+    if not FEISHU_WEBHOOK:
+        print("⚠️ 未设置飞书 Webhook")
+        return
+
+    title = "UT Bot 买入✅" if side == "BUY" else "UT Bot 卖出❌"
     color = "green" if side == "BUY" else "red"
+
     msg = {
         "msg_type": "interactive",
         "card": {
@@ -63,14 +59,14 @@ def send_feishu(symbol, side, price, time_str):
     }
     try:
         requests.post(FEISHU_WEBHOOK, json=msg)
-    except Exception as e:
-        print("飞书推送失败:", e)
+    except:
+        pass
 
-# ==================== UT 核心（和TV完全一致）====================
+# UT 核心算法（和TradingView完全一致）
 def calculate_ut(df):
-    high = df['high']
-    low = df['low']
-    close = df['close']
+    high = df["high"]
+    low = df["low"]
+    close = df["close"]
 
     tr1 = high - low
     tr2 = abs(high - close.shift(1))
@@ -92,7 +88,7 @@ def calculate_ut(df):
         else:
             trend.iloc[i] = trend.iloc[i-1]
 
-    # ✅ 关键：判断【倒数第二根】= TV收盘信号（不会漏）
+    # 判断倒数第二根K线（收盘信号，和TV完全一致）
     buy = (src.iloc[-2] > trend.iloc[-2]) & (src.iloc[-3] <= trend.iloc[-3])
     sell = (src.iloc[-2] < trend.iloc[-2]) & (src.iloc[-3] >= trend.iloc[-3])
     return buy, sell, round(close.iloc[-2], 4)
@@ -100,15 +96,15 @@ def calculate_ut(df):
 # 获取K线
 def get_klines(symbol):
     ohlcv = exchange.fetch_ohlcv(symbol, TIMEFRAME, limit=100)
-    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True).dt.tz_convert(BEIJING)
+    df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True).dt.tz_convert(BEIJING)
     return df
 
 # ==================== 主程序 ====================
 now_str = datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M:%S")
 current_slot = datetime.now(BEIJING).strftime("%Y-%m-%d_%H_%M")
 
-print(f"\n📊 [{now_str}] 扫描 UT 收盘信号...")
+print(f"\n📊 [{now_str}] UT Bot 扫描中...")
 
 for sym in SYMBOLS:
     try:

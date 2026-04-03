@@ -1,7 +1,6 @@
 name: UT Bot Monitor
 
 on:
-  push:
   workflow_dispatch:
   schedule:
     - cron: '*/15 * * * *'
@@ -18,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ccxt pandas pytz requests
+          pip install pandas yfinance pytz requests
       - name: Run Bot
         env:
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}

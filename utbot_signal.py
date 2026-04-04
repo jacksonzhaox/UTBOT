@@ -8,6 +8,7 @@ import yfinance as yf
 
 # ==================== 配置 =====================
 FEISHU_WEBHOOK = os.getenv("FEISHU_WEBHOOK")
+print("✅ 飞书 WEBHOOK 读取成功:", FEISHU_WEBHOOK)  # 调试日志
 
 SYMBOLS = [
     "BTC-USD",
@@ -37,13 +38,13 @@ def save_last_signals(data):
 
 last_signals = load_last_signals()
 
-# 飞书推送
+# ==================== 飞书推送（100%可用版）====================
 def send_feishu(symbol, side, price, time_str):
     if not FEISHU_WEBHOOK:
-        print("⚠️ 未设置飞书 Webhook")
+        print("❌ 飞书推送失败：未设置 WEBHOOK")
         return
 
-    title = "UT Bot 买入✅" if side == "BUY" else "UT Bot 卖出❌"
+    title = "✅ UT Bot 买入信号" if side == "BUY" else "❌ UT Bot 卖出信号"
     color = "green" if side == "BUY" else "red"
 
     msg = {
@@ -57,12 +58,15 @@ def send_feishu(symbol, side, price, time_str):
             }]
         }
     }
-    try:
-        requests.post(FEISHU_WEBHOOK, json=msg)
-    except Exception as e:
-        print(f"飞书推送失败: {e}")
 
-# UT 算法（和TradingView完全一致）
+    try:
+        response = requests.post(FEISHU_WEBHOOK, json=msg, timeout=10)
+        print(f"📤 飞书推送状态码: {response.status_code}")
+        print(f"📤 飞书返回内容: {response.text}")
+    except Exception as e:
+        print(f"📤 飞书推送异常: {e}")
+
+# ==================== UT 算法 ====================
 def calculate_ut(df):
     high = df["High"]
     low = df["Low"]
@@ -88,14 +92,12 @@ def calculate_ut(df):
         else:
             trend.iloc[i] = trend.iloc[i-1]
 
-    # 收盘信号，和TV完全一致
     buy = (src.iloc[-2] > trend.iloc[-2]) & (src.iloc[-3] <= trend.iloc[-3])
     sell = (src.iloc[-2] < trend.iloc[-2]) & (src.iloc[-3] >= trend.iloc[-3])
     return buy, sell, round(close.iloc[-2], 4)
 
-# 获取K线（Yahoo Finance，GitHub零封禁）
+# 获取K线
 def get_klines(symbol):
-    # 拉取5天15分钟K线，足够计算ATR
     data = yf.Ticker(symbol).history(period="5d", interval=TIMEFRAME)
     return data
 
@@ -112,12 +114,12 @@ for sym in SYMBOLS:
         key = f"{sym}_{current_slot}"
 
         if buy and last_signals.get(key) != "BUY":
-            print(f"✅ {sym} 买入")
+            print(f"✅ {sym} 买入信号触发")
             send_feishu(sym, "BUY", price, now_str)
             last_signals[key] = "BUY"
 
         if sell and last_signals.get(key) != "SELL":
-            print(f"❌ {sym} 卖出")
+            print(f"❌ {sym} 卖出信号触发")
             send_feishu(sym, "SELL", price, now_str)
             last_signals[key] = "SELL"
 

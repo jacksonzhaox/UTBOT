@@ -8,7 +8,7 @@ import yfinance as yf
 
 # ==================== 配置 =====================
 FEISHU_WEBHOOK = os.getenv("FEISHU_WEBHOOK")
-print("✅ 飞书 WEBHOOK 读取成功:", FEISHU_WEBHOOK)  # 调试日志
+print("✅ 飞书 WEBHOOK 读取成功:", FEISHU_WEBHOOK)
 
 SYMBOLS = [
     "BTC-USD",
@@ -19,6 +19,7 @@ SYMBOLS = [
 ]
 
 TIMEFRAME = "15m"
+ATR_LENGTH = 10
 ATR_LENGTH = 10
 ATR_MULTI = 2.0
 BEIJING = pytz.timezone("Asia/Shanghai")
@@ -66,6 +67,21 @@ def send_feishu(symbol, side, price, time_str):
     except Exception as e:
         print(f"📤 飞书推送异常: {e}")
 
+# 每次运行必发：在线状态通知
+def send_online_status(time_str):
+    if not FEISHU_WEBHOOK:
+        return
+    msg = {
+        "msg_type": "text",
+        "content": {
+            "text": f"✅ UT Bot 在线运行中\n⏰ 时间: {time_str}\n📡 状态: 正常扫描"
+        }
+    }
+    try:
+        requests.post(FEISHU_WEBHOOK, json=msg, timeout=10)
+    except:
+        pass
+
 # ==================== UT 算法 ====================
 def calculate_ut(df):
     high = df["High"]
@@ -104,6 +120,9 @@ def get_klines(symbol):
 # ==================== 主程序 ====================
 now_str = datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M:%S")
 current_slot = datetime.now(BEIJING).strftime("%Y-%m-%d_%H_%M")
+
+# ========== 每次运行 100% 发飞书 ==========
+send_online_status(now_str)
 
 print(f"\n📊 [{now_str}] UT Bot 扫描中...")
 

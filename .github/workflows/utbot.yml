@@ -17,8 +17,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas yfinance pytz requests
+          pip install requests
       - name: Run Bot
         env:
-          FEISHU_WEBHOOK: ${{ secrets.UTBOT_WEBHOOK }}
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
         run: python utbot_signal.py

@@ -16,7 +16,7 @@ ATR_LENGTH = 10
 ATR_MULTI = 2.0
 LAST_SIGNAL_FILE = "last_signals.json"
 
-# ==================== 飞书推送（最终极简专业卡片）====================
+# ==================== 飞书推送（极简专业卡片）====================
 def send_feishu(symbol, side, price, time_str):
     if not FEISHU_WEBHOOK:
         print("❌ 飞书推送失败：未设置 WEBHOOK")
@@ -45,7 +45,7 @@ def send_feishu(symbol, side, price, time_str):
     except Exception as e:
         print(f"📤 推送异常: {e}")
 
-# ==================== 在线状态（极简专业）====================
+# ==================== 在线状态 ====================
 def send_online_status(time_str):
     if not FEISHU_WEBHOOK:
         return
@@ -58,7 +58,7 @@ def send_online_status(time_str):
     except Exception:
         pass
 
-# ==================== UT 算法（最终稳定版）====================
+# ==================== UT 算法（实时信号 · 不等收盘）====================
 def calculate_ut(df):
     high = df["High"]
     low = df["Low"]
@@ -84,9 +84,13 @@ def calculate_ut(df):
         else:
             trend.iloc[i] = trend.iloc[i-1]
 
-    buy = (src.iloc[-2] > trend.iloc[-2]) & (src.iloc[-3] <= trend.iloc[-3])
-    sell = (src.iloc[-2] < trend.iloc[-2]) & (src.iloc[-3] >= trend.iloc[-3])
-    return buy, sell, round(close.iloc[-2], 4)
+    # ==============================================
+    # 🔥 关键修改：实时触发，不等收盘，不重绘
+    # ==============================================
+    buy = src.iloc[-1] > trend.iloc[-1] and src.iloc[-2] <= trend.iloc[-2]
+    sell = src.iloc[-1] < trend.iloc[-1] and src.iloc[-2] >= trend.iloc[-2]
+    
+    return buy, sell, round(close.iloc[-1], 4)
 
 # 获取K线
 def get_klines(symbol):
@@ -103,12 +107,12 @@ def save_last_signals(data):
     with open(LAST_SIGNAL_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
 
-# ==================== 主程序（最终）====================
+# ==================== 主程序 ====================
 now_str = datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M:%S")
-current_slot = datetime.now(BEIJING).strftime("%Y-%m-%d_%H_%M")
+current_minute = datetime.now(BEIJING).strftime("%Y%m%d%H%M")
 
 send_online_status(now_str)
-print(f"\n📊 [{now_str}] UT Bot 扫描中...")
+print(f"\n📊 [{now_str}] UT Bot 实时扫描中...")
 
 last_signals = load_last_signals()
 
@@ -116,15 +120,15 @@ for sym in SYMBOLS:
     try:
         df = get_klines(sym)
         buy, sell, price = calculate_ut(df)
-        key = f"{sym}_{current_slot}"
+        key = f"{sym}_{current_minute}"
 
         if buy and last_signals.get(key) != "BUY":
-            print(f"✅ {sym} 买入信号")
+            print(f"✅ {sym} 实时买入信号")
             send_feishu(sym, "BUY", price, now_str)
             last_signals[key] = "BUY"
 
         if sell and last_signals.get(key) != "SELL":
-            print(f"❌ {sym} 卖出信号")
+            print(f"❌ {sym} 实时卖出信号")
             send_feishu(sym, "SELL", price, now_str)
             last_signals[key] = "SELL"
 

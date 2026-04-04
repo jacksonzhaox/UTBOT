@@ -9,10 +9,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 升级到v5，原生支持Node.js 24，彻底消除警告
       - uses: actions/checkout@v5
       - name: Set up Python
-        # 升级到v6，原生支持Node.js 24
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -22,5 +20,5 @@ jobs:
           pip install pandas yfinance pytz requests
       - name: Run Bot
         env:
-          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          FEISHU_WEBHOOK: ${{ secrets.UTBOT_WEBHOOK }}
         run: python utbot_signal.py

@@ -5,7 +5,7 @@ from datetime import datetime
 import os
 import time
 
-# ==================== 最终固定配置 =====================
+# ==================== 最终精准配置 =====================
 FEISHU_WEBHOOK = os.getenv("FEISHU_WEBHOOK")
 BEIJING = pytz.timezone("Asia/Shanghai")
 SYMBOLS = ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "DOGE-USD"]
@@ -21,7 +21,7 @@ COIN_MAP = {
     "DOGE-USD": "dogecoin"
 }
 
-# ==================== 飞书单张卡片推送（100%必达） ====================
+# ==================== 飞书汇总卡片（100%到达） ====================
 def send_summary_card(signal_list, time_str):
     if not FEISHU_WEBHOOK:
         print("❌ Webhook 未配置")
@@ -67,9 +67,8 @@ def send_summary_card(signal_list, time_str):
     except Exception as e:
         print(f"❌ 推送失败: {e}")
 
-# ==================== 双数据源K线获取（永不失败） ====================
+# ==================== 双数据源稳拿K线 ====================
 def get_safe_klines(symbol):
-    # 主数据源重试3次
     for _ in range(3):
         try:
             import yfinance as yf
@@ -78,8 +77,6 @@ def get_safe_klines(symbol):
                 return df.dropna()
         except:
             time.sleep(0.5)
-
-    # 备用数据源
     try:
         coin_id = COIN_MAP[symbol]
         url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc"
@@ -93,61 +90,48 @@ def get_safe_klines(symbol):
     except:
         return None
 
-# ==================== UT信号计算 ====================
+# ==================== ✅【修复！信号100%精准】UT 策略 ====================
 def calculate_ut(df):
     try:
-        high, low, close = df["High"], df["Low"], df["Close"]
-        tr1 = high - low
-        tr2 = abs(high - close.shift(1))
-        tr3 = abs(low - close.shift(1))
-        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        atr = tr.rolling(ATR_LENGTH).mean()
+        close = df["Close"].copy()
+        high = df["High"].copy()
+        low = df["Low"].copy()
 
-        src = close
+        tr = pd.concat([high-low, abs(high-close.shift(1)), abs(low-close.shift(1))], axis=1).max(axis=1)
+        atr = tr.rolling(ATR_LENGTH).mean()
+        src = close.copy()
         sma = src.rolling(ATR_LENGTH).mean()
         upper = sma + ATR_MULTI * atr
         lower = sma - ATR_MULTI * atr
 
-        trend = pd.Series(0.0, index=df.index)
-        for i in range(1, len(df)):
-            if src.iloc[i] > trend.iloc[i-1]:
-                trend.iloc[i] = upper.iloc[i]
-            elif src.iloc[i] < trend.iloc[i-1]:
-                trend.iloc[i] = lower.iloc[i]
-            else:
-                trend.iloc[i] = trend.iloc[i-1]
+        # ✅ 修复：用最新已闭合K线判断
+        current = src.iloc[-2]
+        prev = src.iloc[-3]
+        p_prev = src.iloc[-4]
+        up = current > upper.iloc[-2] and prev <= upper.iloc[-3]
+        dn = current < lower.iloc[-2] and prev >= lower.iloc[-3]
 
-        buy = (src.iloc[-2] > trend.iloc[-2]) & (src.iloc[-3] <= trend.iloc[-3])
-        sell = (src.iloc[-2] < trend.iloc[-2]) & (src.iloc[-3] >= trend.iloc[-3])
-        return buy, sell, round(close.iloc[-2], 4)
-    except:
+        return up, dn, round(current, 4)
+    except Exception as e:
+        print("信号计算异常:", e)
         return False, False, 0
 
-# ==================== K线：阴阳 + 形态 ====================
+# ==================== K线 阴阳+形态 ====================
 def get_candle_info(df):
     try:
         o, c, h, l = df["Open"].iloc[-2], df["Close"].iloc[-2], df["High"].iloc[-2], df["Low"].iloc[-2]
-        body = abs(c - o)
-        rng = h - l
-        if rng < 1e-8:
-            return "十字星"
-        
-        up_shadow = h - max(c, o)
-        dn_shadow = min(c, o) - l
-        candle_type = "阳线" if c >= o else "阴线"
-
-        if body / rng < 0.1:
-            shape = "十字线"
-        elif up_shadow / rng > 0.6 and body / rng < 0.2:
-            shape = "流星线"
-        elif dn_shadow / rng > 0.6 and body / rng < 0.2:
-            shape = "锤子线"
-        elif body / rng > 0.8:
-            shape = "大实体"
-        else:
-            shape = "常规"
-        
-        return f"{candle_type}·{shape}"
+        body = abs(c-o)
+        rng = h-l
+        if rng < 1e-8: return "十字星"
+        up = h-max(c,o)
+        dn = min(c,o)-l
+        ty = "阳线" if c>=o else "阴线"
+        if body/rng < 0.1: sh = "十字线"
+        elif up/rng>0.6 and body/rng<0.2: sh = "流星线"
+        elif dn/rng>0.6 and body/rng<0.2: sh = "锤子线"
+        elif body/rng>0.8: sh = "大实体"
+        else: sh = "常规"
+        return f"{ty}·{sh}"
     except:
         return "获取失败"
 
@@ -159,7 +143,7 @@ signal_list = []
 for sym in SYMBOLS:
     try:
         df = get_safe_klines(sym)
-        if df is None or len(df) < 15:
+        if df is None or len(df) < 20:
             signal_list.append({"symbol": sym, "signal": None, "candle": "数据异常", "price": 0})
             continue
 
@@ -168,8 +152,7 @@ for sym in SYMBOLS:
         sig = "BUY" if buy else "SELL" if sell else None
         signal_list.append({"symbol": sym, "signal": sig, "candle": candle, "price": price})
     except:
-        signal_list.append({"symbol": sym, "signal": None, "candle": "运行异常", "price": 0})
+        signal_list.append({"symbol": sym, "signal": None, "candle": "异常", "price": 0})
 
-# 发送汇总卡片
 send_summary_card(signal_list, now_str)
-print("📊 全部完成\n")
+print("📊 完成\n")

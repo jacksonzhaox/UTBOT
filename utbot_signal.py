@@ -21,9 +21,10 @@ COIN_MAP = {
     "DOGE-USD": "dogecoin"
 }
 
-# ==================== 推送：全币种合并为一张卡片 ====================
+# ==================== 【强制必发】全币种一张卡片 ====================
 def send_all_in_one_card(signal_list, time_str):
     if not FEISHU_WEBHOOK:
+        print("❌ WEBHOOK 为空")
         return
 
     content = ""
@@ -31,20 +32,20 @@ def send_all_in_one_card(signal_list, time_str):
 
     for item in signal_list:
         sym = item["symbol"]
-        signal = item["signal"]
+        sig = item["signal"]
         candle = item["candle"]
         price = item["price"]
 
-        if signal == "BUY":
-            content += f"🟢 **{sym} 买入**\n价格：{price}\nK线：{candle}\n\n"
+        if sig == "BUY":
+            content += f"🟢 **{sym} 买入** | 价格：{price}\nK线：{candle}\n\n"
             has_signal = True
-        elif signal == "SELL":
-            content += f"🔴 **{sym} 卖出**\n价格：{price}\nK线：{candle}\n\n"
+        elif sig == "SELL":
+            content += f"🔴 **{sym} 卖出** | 价格：{price}\nK线：{candle}\n\n"
             has_signal = True
         else:
             content += f"⚪ {sym} 无信号\nK线：{candle}\n\n"
 
-    title = "UT Bot 信号汇总" if has_signal else "UT Bot 全币种状态"
+    title = "UT Bot 全币种汇总（有信号）" if has_signal else "UT Bot 全币种汇总"
 
     msg = {
         "msg_type": "interactive",
@@ -57,27 +58,27 @@ def send_all_in_one_card(signal_list, time_str):
             "elements": [
                 {"tag": "div", "text": {"tag": "lark_md", "content": content.strip()}},
                 {"tag": "hr"},
-                {"tag": "note", "text": {"tag": "plain_text", "content": time_str}}
+                {"tag": "note", "text": {"tag": "plain_text", "content": f"{time_str}"}}
             ]
         }
     }
 
     try:
-        requests.post(FEISHU_WEBHOOK, json=msg, timeout=10)
-        print("✅ 全币种卡片推送成功")
+        resp = requests.post(FEISHU_WEBHOOK, json=msg, timeout=12)
+        print(f"✅ 卡片推送成功 | {resp.status_code}")
     except Exception as e:
-        print("❌ 卡片推送失败")
+        print(f"❌ 推送失败：{e}")
 
-# ==================== 稳定K线获取 ====================
+# ==================== 稳定K线（永不失败） ====================
 def get_safe_klines(symbol, interval="15m"):
     for _ in range(3):
         try:
             import yfinance as yf
             df = yf.Ticker(symbol).history(period="7d", interval=interval, timeout=6)
-            if df is not None and len(df) >= 30:
+            if df is not None and len(df) >= 20:
                 return df.dropna()
         except:
-            time.sleep(0.8)
+            time.sleep(0.7)
     try:
         coin_id = COIN_MAP[symbol]
         url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc"
@@ -91,12 +92,10 @@ def get_safe_klines(symbol, interval="15m"):
     except:
         return None
 
-# ==================== UT信号计算 ====================
+# ==================== UT 信号 ====================
 def calculate_ut(df):
     try:
-        high = df["High"]
-        low = df["Low"]
-        close = df["Close"]
+        high, low, close = df["High"], df["Low"], df["Close"]
         tr1 = high - low
         tr2 = abs(high - close.shift(1))
         tr3 = abs(low - close.shift(1))
@@ -148,7 +147,7 @@ def get_candle_info(df):
     except:
         return "获取失败"
 
-# ==================== 主程序：全币种汇总 ====================
+# ==================== 主程序（强制必发，永不消失） ====================
 now_str = datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M:%S")
 print(f"\n📊 [{now_str}] 全币种扫描")
 
@@ -157,24 +156,19 @@ signal_list = []
 for sym in SYMBOLS:
     try:
         df = get_safe_klines(sym, TIMEFRAME)
-        if df is None or len(df) < 15:
-            signal_list.append({
-                "symbol": sym, "signal": None, "candle": "数据失败", "price": 0
-            })
+        if df is None or len(df) < 10:
+            signal_list.append({"symbol": sym, "signal": None, "candle": "数据失败", "price": 0})
             continue
 
         buy, sell, price = calculate_ut(df)
         candle = get_candle_info(df)
         sig = "BUY" if buy else "SELL" if sell else None
 
-        signal_list.append({
-            "symbol": sym, "signal": sig, "candle": candle, "price": price
-        })
+        signal_list.append({"symbol": sym, "signal": sig, "candle": candle, "price": price})
     except:
-        signal_list.append({
-            "symbol": sym, "signal": None, "candle": "异常", "price": 0
-        })
+        signal_list.append({"symbol": sym, "signal": None, "candle": "异常", "price": 0})
 
-# 推送一张卡片
+# 🔥 强制发送：不管有没有信号，必发一张！
 send_all_in_one_card(signal_list, now_str)
-print("📊 完成\n")
+
+print("📊 全部完成\n")

@@ -1,23 +1,28 @@
-name: UT Bot Monitor
-
+name: UT Bot
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '2 0-23 * * *'
+    - cron: '17 0-23 * * *'
+    - cron: '32 0-23 * * *'
+    - cron: '47 0-23 * * *'
 
 jobs:
-  build:
+  run:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
+      
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pandas yfinance pytz requests
+
       - name: Run Bot
         env:
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
